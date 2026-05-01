@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #define MAX_COLUMNS 20
 #define MAX_FIELD_LEN 100
-#define MAX_ROWS 500
 
 char header[MAX_COLUMNS][MAX_FIELD_LEN];
 
@@ -77,12 +77,20 @@ int main(const int argc, char* argv[])
         return 1;
     }
 
-    // storage
-    Row rows[MAX_ROWS] = {0};
-    char buffer[255];
-    bool isFirstLine = true;
-    int columnCount = 0;
+    // dynamic storage — start with 10, grow as needed
+    int capacity = 10;
     int rowCount = 0;
+    int columnCount = 0;
+    bool isFirstLine = true;
+    char buffer[255];
+
+    Row* rows = calloc(capacity, sizeof(Row));
+    if (rows == NULL)
+    {
+        printf("Error: out of memory\n");
+        fclose(pF);
+        return 1;
+    }
 
     // read and parse CSV
     while (fgets(buffer, sizeof(buffer), pF) != NULL)
@@ -90,7 +98,7 @@ int main(const int argc, char* argv[])
         buffer[strcspn(buffer, "\n")] = 0;
 
         int colIndex = 0;
-        char* token = strtok(buffer, ",");
+        const char* token = strtok(buffer, ",");
 
         while (token != NULL)
         {
@@ -101,7 +109,7 @@ int main(const int argc, char* argv[])
             }
             else
             {
-                if (rowCount < MAX_ROWS && colIndex < MAX_COLUMNS)
+                if (colIndex < MAX_COLUMNS)
                 {
                     strcpy(rows[rowCount].fields[colIndex], token);
                 }
@@ -112,9 +120,28 @@ int main(const int argc, char* argv[])
         }
 
         if (isFirstLine)
+        {
             isFirstLine = false;
+        }
         else
+        {
             rowCount++;
+
+            // grow if we're about to overflow
+            if (rowCount >= capacity)
+            {
+                capacity *= 2;
+                Row* temp = realloc(rows, capacity * sizeof(Row));
+                if (temp == NULL)
+                {
+                    printf("Error: out of memory\n");
+                    free(rows);
+                    fclose(pF);
+                    return 1;
+                }
+                rows = temp;
+            }
+        }
     }
 
     fclose(pF);
@@ -151,6 +178,7 @@ int main(const int argc, char* argv[])
         if (colIndex == -1)
         {
             printf("Error: column '%s' not found in '%s'\n", columnArg, argv[1]);
+            free(rows);
             return 1;
         }
 
@@ -171,5 +199,6 @@ int main(const int argc, char* argv[])
             printf("No results found for '%s' in column '%s'\n", searchArg, columnArg);
     }
 
+    free(rows);
     return 0;
 }
